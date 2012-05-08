@@ -9,7 +9,8 @@ Usage:
 Both arguments are optional, defaulting to 12345 and STANDARD_AUDIO_FORMATS
 respectively.
 
-See README.md or the GitHub page for more information.
+See README.md or the GitHub page for more information:
+https://github.com/menboku/musicsharer
 """
 
 __author__ = "John Smith <code@john-smith.me>"
