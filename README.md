@@ -66,8 +66,10 @@ you're best advised to turn off power-saving features.
 ## ToDo
 
 Write some tests, primarily to prove the Range header processing.  (This
-will probably need me to read the HTTP spec properly, the support at
-present is purely based on empirical observations of what browsers send.)
+will need me to read and understand the HTTP spec properly, the support at
+present is purely based on empirical observations of what browsers send, and
+I see from the spec there are other variations that my code doesn't support:
+http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.35 )
 
 Make the client UI nicer - there hasn't been any effort expended in this area,
 as you'll quickly discover ;-)
