@@ -72,7 +72,17 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         """
         Return a 2-element tuple containing the requested Range offsets
         in bytes.  If no Range explicitly requested, or is "0-", or fails
-        to parse, returns (None, None)
+        to parse, returns (None, None).
+
+        As the size of the served file isn't known at the time this header
+        is parsed, if a Range comes in of the form "bytes=-1000" (serve final
+        1000 bytes), the return will be of the form (None, numbytes), rather
+        than an attempt to calculate the absolute offsets.  Use the 
+        sanitise_content_range() method once you know the actual size to turn
+        the offsets into something more usable.
+
+        Requests for multiple ranges (e.g. 1-10, 20-30) are not currently
+        supported, and in these cases (None, None) will be returned.
         """
         range_header = self.headers.getheader("Range")
         if range_header is None:
@@ -81,23 +91,51 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             logging.warning("Don't know how to parse Range: %s [1]" % 
                             (range_header))
             return (None, None)
+
+        if "," in range_header:
+            logging.warning("Multiple Range groups not supported: %s" %
+                            (range_header))
+            return (None, None)
+
         regex = re.compile(r"^bytes=(\d+)\-(\d+)?")
         rangething = regex.search(range_header)
         if rangething:
-            logging.debug("Requested range is [%s]-[%s]" % 
-                          (rangething.group(1), rangething.group(2)))
-            from_val = int(rangething.group(1))
-            if rangething.group(2) is not None:
-                return (from_val, int(rangething.group(2)))
-            else:
-                if from_val == 0:
-                    return (None, None)
+            # logging.debug("Requested range is [%s]-[%s]" % 
+            #               (rangething.group(1), rangething.group(2)))
+            if rangething.group(1) is not None:
+                from_val = int(rangething.group(1))
+                if rangething.group(2) is not None:
+                    return (from_val, int(rangething.group(2)))
                 else:
-                    return (from_val, None)
-        else:
-            logging.warning("Don't know how to parse Range: %s [2]" % 
+                    if from_val == 0:
+                        return (None, None)
+                    else:
+                        return (from_val, None)
+            elif rangething.group(2) is not None:
+                return (None, int(rangething.group(2)))
+
+        logging.warning("Don't know how to parse Range: %s [2]" % 
                             (range_header))
-            return (None, None)
+        return (None, None)
+
+    def sanitise_content_range(self, file_length):
+        """
+        Given a known length for the full file/resource, correct any
+        vagueness or stupidity in the content-range values that couldn't
+        have been known at parse time.
+        """
+        if not self.range_from:
+            # We want the final N bytes
+            self.range_from = file_length - self.range_to
+            self.range_to = file_length - 1
+
+        # Handle any requests for more data than the file has
+        # TODO: Establish if this is the most-correct way of handling these
+        # nonsensical requests - should we instead respond with an HTTP error?
+        if self.range_from >= file_length:
+            self.range_from = file_length - 1
+        if self.range_to >= file_length:
+            self.range_to = file_length - 1
 
     def send_head(self):
         """Common code for GET and HEAD commands.
@@ -140,7 +178,7 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         self.send_header("Content-type", ctype)
         fs = os.fstat(f.fileno())
         if self.range_from is not None and self.range_to is not None:
-            # TODO: Should also check that range is within the file size
+            self.sanitise_content_range(fs[6])
             self.send_header("Content-Range",
                              "bytes %d-%d/%d" % (self.range_from,
                                                  self.range_to,
