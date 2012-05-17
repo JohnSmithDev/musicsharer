@@ -56,14 +56,7 @@ obvious:
   serving the entire file, which causes Mobile Safari to fail with a fairly
   unhelpful error message.
 
-## Notes on usage
-
-Mobile Safari will continue to play a track even when you switch to another
-app, or let the device go into sleep mode.  However, it won't run the
-JavaScript to load and play the next track, so if you're playing an album,
-you're best advised to turn off power-saving features.
-
-## ToDo
+## Bugs and ToDo
 
 Write some tests, primarily to prove the Range header processing.  (This
 will need me to read and understand the HTTP spec properly, the support at
@@ -79,3 +72,9 @@ Allow directory navigation from the client.
 Optionally allow some external programs (e.g. mencoder, ffmpeg?) to transcode
 files into a format a client browser supports (e.g. MP3 to OGG for Firefox,
 Opera; OGG to MP3 for Safari), similar to how a DNLA server works AFAIK.
+
+Automatic advancing to the next track doesn't work in the iOS 4 version of
+Mobile Safari.  Given how cantankerous Mobile Safari is with audio/video
+elements, I'm not inclined to waste time trying to fix this - I'll only be
+supporting the current version.
+
