@@ -75,7 +75,6 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         to parse, returns (None, None)
         """
         range_header = self.headers.getheader("Range")
-	logging.warning("%s [1]" % (range_header))
         if range_header is None:
             return (None, None)
         if not range_header.startswith("bytes="):
