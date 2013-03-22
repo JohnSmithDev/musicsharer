@@ -78,3 +78,8 @@ Mobile Safari.  Given how cantankerous Mobile Safari is with audio/video
 elements, I'm not inclined to waste time trying to fix this - I'll only be
 supporting the current version.
 
+## License
+
+BSD (2-clause variant) - see LICENSE.txt
+
+
