@@ -113,7 +113,7 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
         """
         self.range_from, self.range_to = self.parse_range_header()
-        path = self.translate_path(self.path)
+	path = self.translate_path(self.path)
         f = None
         if os.path.isdir(path):
             if not self.path.endswith('/'):
@@ -138,7 +138,10 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         except IOError:
             self.send_error(404, "File not found")
             return None
-        self.send_response(200)
+        if self.range_from is not None and self.range_to is not None:
+		self.send_response(206)
+	else:
+		self.send_response(200)
         self.send_header("Content-type", ctype)
         fs = os.fstat(f.fileno())
         if self.range_from is not None and self.range_to is not None:
