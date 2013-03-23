@@ -1,0 +1,2 @@
+This is a dummy file with 100 characters in, for testing that
+HTTPRangeServer behaves correctly.END
