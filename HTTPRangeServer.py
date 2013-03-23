@@ -10,7 +10,7 @@ part of the Python stdlib.  This uses the versions that ship with Python
 Licensed under BSD 2-Clause License
 
 """
-__version__ = "0.1"
+__version__ = "0.2"
 
 __author__ = "John Smith <code@john-smith.me>"
 
@@ -113,7 +113,7 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
         """
         self.range_from, self.range_to = self.parse_range_header()
-	path = self.translate_path(self.path)
+        path = self.translate_path(self.path)
         f = None
         if os.path.isdir(path):
             if not self.path.endswith('/'):
@@ -139,9 +139,9 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             self.send_error(404, "File not found")
             return None
         if self.range_from is not None and self.range_to is not None:
-		self.send_response(206)
-	else:
-		self.send_response(200)
+            self.send_response(206)
+        else:
+            self.send_response(200)
         self.send_header("Content-type", ctype)
         fs = os.fstat(f.fileno())
         if self.range_from is not None and self.range_to is not None:
