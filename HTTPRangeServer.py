@@ -22,6 +22,65 @@ import SimpleHTTPServer
 import logging
 import re
 
+class InvalidRangeHeader(Exception):
+    pass
+
+def parse_range_header(range_header, total_length):
+    """
+    Return a 2-element tuple containing the requested range offsets
+    in bytes.
+    - range_header is the HTTP header sans the "Range:" prefix
+    - total_length is the length in bytes of the requested resource
+      (needed to calculate offsets for a 'n bytes from the end' request
+    If no Range explicitly requested, returns (None, None)
+    If Range header could not be parsed, raises InvalidRangeHeader
+    (which could either be handled as a user
+    request failure, or the same as if (None, None) was returned
+    """
+    # range_header = self.headers.getheader("Range")
+    if range_header is None or range_header == "":
+        return (None, None)
+    if not range_header.startswith("bytes="):
+        # logging.error("Don't know how to parse Range: %s [1]" %
+        #                (range_header))
+        raise InvalidRangeHeader("Don't know how to parse non-bytes Range: %s" %
+                                 (range_header))
+    regex = re.compile(r"^bytes=(\d*)\-(\d*)$")
+    rangething = regex.search(range_header)
+    if rangething:
+        r1 = rangething.group(1)
+        r2 = rangething.group(2)
+        logging.debug("Requested range is [%s]-[%s]" % (r1, r2))
+
+        if r1 == "" and r2 == "":
+            # logging.warning("Requested range is meaningless")
+            raise InvalidRangeHeader("Requested range is meaningless")
+
+        if r1 == "":
+            # x bytes from the end of the file
+            try:
+                final_bytes = int(r2)
+            except ValueError:
+                raise InvalidRangeHeader("Invalid trailing range")
+            return (total_length-final_bytes, total_length - 1)
+
+        try:
+            from_val = int(r1)
+        except ValueError:
+            raise InvalidRangeHeader("Invalid starting range value")
+        if r2 != "":
+            try:
+                end_val = int(r2)
+            except ValueError:
+                raise InvalidRangeHeader("Invalid ending range value")
+            return (from_val, end_val)
+        else:
+            return (from_val, total_length - 1)
+    else:
+        raise InvalidRangeHeader("Don't know how to parse Range: %s" %
+                                 (range_header))
+
+
 class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
 
     """
@@ -70,36 +129,6 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
             bytes_copied += len(read_buf)
         return bytes_copied
 
-    def parse_range_header(self):
-        """
-        Return a 2-element tuple containing the requested Range offsets
-        in bytes.  If no Range explicitly requested, or is "0-", or fails
-        to parse, returns (None, None)
-        """
-        range_header = self.headers.getheader("Range")
-        if range_header is None:
-            return (None, None)
-        if not range_header.startswith("bytes="):
-            logging.warning("Don't know how to parse Range: %s [1]" % 
-                            (range_header))
-            return (None, None)
-        regex = re.compile(r"^bytes=(\d+)\-(\d+)?")
-        rangething = regex.search(range_header)
-        if rangething:
-            logging.debug("Requested range is [%s]-[%s]" % 
-                          (rangething.group(1), rangething.group(2)))
-            from_val = int(rangething.group(1))
-            if rangething.group(2) is not None:
-                return (from_val, int(rangething.group(2)))
-            else:
-                if from_val == 0:
-                    return (None, None)
-                else:
-                    return (from_val, None)
-        else:
-            logging.warning("Don't know how to parse Range: %s [2]" % 
-                            (range_header))
-            return (None, None)
 
     def send_head(self):
         """Common code for GET and HEAD commands.
@@ -112,7 +141,6 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         None, in which case the caller has nothing further to do.
 
         """
-        self.range_from, self.range_to = self.parse_range_header()
         path = self.translate_path(self.path)
         f = None
         if os.path.isdir(path):
@@ -138,23 +166,36 @@ class HTTPRangeRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
         except IOError:
             self.send_error(404, "File not found")
             return None
-        if self.range_from is not None and self.range_to is not None:
+
+        fs = os.fstat(f.fileno())
+        total_length = fs[6]
+        try:
+            self.range_from, self.range_to = parse_range_header(
+                self.headers.getheader("Range"), total_length)
+        except InvalidRangeHeader, e:
+            # Just serve them the whole file, although it's possibly
+            # more correct to return a 4xx error?
+            logging.warning("Range header parsing failed, "
+                            "serving complete file")
+            self.range_from = self.range_to = None
+
+        if self.range_from is not None or self.range_to is not None:
             self.send_response(206)
+            self.send_header("Accept-Ranges", "bytes")
         else:
             self.send_response(200)
-        self.send_header("Content-type", ctype)
-        fs = os.fstat(f.fileno())
-        if self.range_from is not None and self.range_to is not None:
+        self.send_header("Content-Type", ctype)
+        if self.range_from is not None or self.range_to is not None:
             # TODO: Should also check that range is within the file size
             self.send_header("Content-Range",
                              "bytes %d-%d/%d" % (self.range_from,
                                                  self.range_to,
-                                                 fs[6]))
+                                                 total_length))
             # Add 1 because ranges are inclusive
             self.send_header("Content-Length", 
                              (1 + self.range_to - self.range_from))
         else:
-            self.send_header("Content-Length", str(fs[6]))
+            self.send_header("Content-Length", str(total_length))
         self.send_header("Last-Modified", self.date_time_string(fs.st_mtime))
         self.end_headers()
         return f
